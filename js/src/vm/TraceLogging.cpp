@@ -131,7 +131,7 @@ TraceLoggerThread::init()
 {
     if (!pointerMap.init())
         return false;
-    if (!extraTextId.init())
+    if (!textIdPayloads.init())
         return false;
     if (!events.init())
         return false;
@@ -185,10 +185,10 @@ TraceLoggerThread::~TraceLoggerThread()
         graph = nullptr;
     }
 
-    for (TextIdHashMap::Range r = extraTextId.all(); !r.empty(); r.popFront())
-        js_delete(r.front().value());
-    extraTextId.finish();
-    pointerMap.finish();
+    if (textIdPayloads.initialized()) {
+        for (TextIdHashMap::Range r = textIdPayloads.all(); !r.empty(); r.popFront())
+            js_delete(r.front().value());
+    }
 }
 
 bool
@@ -287,7 +287,7 @@ TraceLoggerThread::eventText(uint32_t id)
     if (id < TraceLogger_Last)
         return TLTextIdString(static_cast<TraceLoggerTextId>(id));
 
-    TextIdHashMap::Ptr p = extraTextId.lookup(id);
+    TextIdHashMap::Ptr p = textIdPayloads.lookup(id);
     MOZ_ASSERT(p);
 
     return p->value()->string();
@@ -341,13 +341,15 @@ TraceLoggerThread::extractScriptDetails(uint32_t textId, const char** filename, 
 TraceLoggerEventPayload*
 TraceLoggerThread::getOrCreateEventPayload(TraceLoggerTextId textId)
 {
-    TextIdHashMap::AddPtr p = extraTextId.lookupForAdd(textId);
-    if (p)
+    TextIdHashMap::AddPtr p = textIdPayloads.lookupForAdd(textId);
+    if (p) {
+        MOZ_ASSERT(p->value()->textId() == textId); // Sanity check.
         return p->value();
+    }
 
     TraceLoggerEventPayload* payload = js_new<TraceLoggerEventPayload>(textId, (char*)nullptr);
 
-    if (!extraTextId.add(p, textId, payload))
+    if (!textIdPayloads.add(p, textId, payload))
         return nullptr;
 
     return payload;
@@ -357,8 +359,10 @@ TraceLoggerEventPayload*
 TraceLoggerThread::getOrCreateEventPayload(const char* text)
 {
     PointerHashMap::AddPtr p = pointerMap.lookupForAdd((const void*)text);
-    if (p)
+    if (p) {
+        MOZ_ASSERT(p->value()->textId() < nextTextId); // Sanity check.
         return p->value();
+    }
 
     size_t len = strlen(text);
     char* str = js_pod_malloc<char>(len + 1);
@@ -369,7 +373,7 @@ TraceLoggerThread::getOrCreateEventPayload(const char* text)
     MOZ_ASSERT(ret == len);
     MOZ_ASSERT(strlen(str) == len);
 
-    uint32_t textId = extraTextId.count() + TraceLogger_Last;
+    uint32_t textId = nextTextId;
 
     TraceLoggerEventPayload* payload = js_new<TraceLoggerEventPayload>(textId, str);
     if (!payload) {
@@ -377,16 +381,18 @@ TraceLoggerThread::getOrCreateEventPayload(const char* text)
         return nullptr;
     }
 
-    if (!extraTextId.putNew(textId, payload)) {
+    if (!textIdPayloads.putNew(textId, payload)) {
         js_delete(payload);
         return nullptr;
     }
 
-    if (!pointerMap.add(p, text, payload))
-        return nullptr;
-
     if (graph.get())
         graph->addTextId(textId, str);
+
+    nextTextId++;
+
+    if (!pointerMap.add(p, text, payload))
+        return nullptr;
 
     return payload;
 }
@@ -407,9 +413,14 @@ TraceLoggerThread::getOrCreateEventPayload(TraceLoggerTextId type, const char* f
     if (!traceLoggerState->isTextIdEnabled(type))
         return getOrCreateEventPayload(type);
 
-    PointerHashMap::AddPtr p = pointerMap.lookupForAdd(ptr);
-    if (p)
-        return p->value();
+    PointerHashMap::AddPtr p;
+    if (ptr) {
+        p = pointerMap.lookupForAdd(ptr);
+        if (p) {
+            MOZ_ASSERT(p->value()->textId() < nextTextId); // Sanity check.
+            return p->value();
+        }
+    }
 
     // Compute the length of the string to create.
     size_t lenFilename = strlen(filename);
@@ -428,23 +439,27 @@ TraceLoggerThread::getOrCreateEventPayload(TraceLoggerTextId type, const char* f
     MOZ_ASSERT(ret == len);
     MOZ_ASSERT(strlen(str) == len);
 
-    uint32_t textId = extraTextId.count() + TraceLogger_Last;
+    uint32_t textId = nextTextId;
     TraceLoggerEventPayload* payload = js_new<TraceLoggerEventPayload>(textId, str);
     if (!payload) {
         js_free(str);
         return nullptr;
     }
 
-    if (!extraTextId.putNew(textId, payload)) {
+    if (!textIdPayloads.putNew(textId, payload)) {
         js_delete(payload);
         return nullptr;
     }
 
-    if (!pointerMap.add(p, ptr, payload))
-        return nullptr;
-
     if (graph.get())
         graph->addTextId(textId, str);
+
+    nextTextId++;
+
+    if (ptr) {
+        if (!pointerMap.add(p, ptr, payload))
+            return nullptr;
+    }
 
     return payload;
 }
@@ -453,14 +468,14 @@ TraceLoggerEventPayload*
 TraceLoggerThread::getOrCreateEventPayload(TraceLoggerTextId type, JSScript* script)
 {
     return getOrCreateEventPayload(type, script->filename(), script->lineno(), script->column(),
-                                   script);
+                                   nullptr);
 }
 
 TraceLoggerEventPayload*
 TraceLoggerThread::getOrCreateEventPayload(TraceLoggerTextId type,
                                            const JS::ReadOnlyCompileOptions& script)
 {
-    return getOrCreateEventPayload(type, script.filename(), script.lineno, script.column, &script);
+    return getOrCreateEventPayload(type, script.filename(), script.lineno, script.column, nullptr);
 }
 
 void
@@ -485,7 +500,7 @@ TraceLoggerThread::startEvent(uint32_t id)
     if (!traceLoggerState->isTextIdEnabled(id))
        return;
 
-    logTimestamp(id);
+    log(id);
 }
 
 void
@@ -510,7 +525,7 @@ TraceLoggerThread::stopEvent(uint32_t id)
     if (!traceLoggerState->isTextIdEnabled(id))
         return;
 
-    logTimestamp(TraceLogger_Stop);
+    log(TraceLogger_Stop);
 }
 
 void
@@ -522,23 +537,57 @@ TraceLoggerThread::logTimestamp(TraceLoggerTextId id)
 void
 TraceLoggerThread::logTimestamp(uint32_t id)
 {
+    MOZ_ASSERT(id > TraceLogger_LastTreeItem && id < TraceLogger_Last);
+    log(id);
+}
+
+void
+TraceLoggerThread::log(uint32_t id)
+{
     if (enabled == 0)
         return;
 
     MOZ_ASSERT(traceLoggerState);
-    if (!events.ensureSpaceBeforeAdd()) {
+
+    // We request for 3 items to add, since if we don't have enough room
+    // we record the time it took to make more place. To log this information
+    // we need 2 extra free entries.
+    if (!events.hasSpaceForAdd(3)) {
         uint64_t start = rdtsc() - traceLoggerState->startupTime;
 
-        if (graph.get())
-            graph->log(events);
+        if (!events.ensureSpaceBeforeAdd(3)) {
+            if (graph.get())
+                graph->log(events);
 
-        iteration_++;
-        events.clear();
+            iteration_++;
+            events.clear();
+
+            // Remove the item in the pointerMap for which the payloads
+            // have no uses anymore
+            for (PointerHashMap::Enum e(pointerMap); !e.empty(); e.popFront()) {
+                if (e.front().value()->uses() != 0)
+                    continue;
+
+                TextIdHashMap::Ptr p = textIdPayloads.lookup(e.front().value()->textId());
+                MOZ_ASSERT(p);
+                textIdPayloads.remove(p);
+
+                e.removeFront();
+            }
+
+            // Free all payloads that have no uses anymore.
+            for (TextIdHashMap::Enum e(textIdPayloads); !e.empty(); e.popFront()) {
+                if (e.front().value()->uses() == 0) {
+                    js_delete(e.front().value());
+                    e.removeFront();
+                }
+            }
+        }
 
         // Log the time it took to flush the events as being from the
         // Tracelogger.
         if (graph.get()) {
-            MOZ_ASSERT(events.capacity() > 2);
+            MOZ_ASSERT(events.hasSpaceForAdd(2));
             EventEntry& entryStart = events.pushUninitialized();
             entryStart.time = start;
             entryStart.textId = TraceLogger_Internal;
@@ -548,13 +597,6 @@ TraceLoggerThread::logTimestamp(uint32_t id)
             entryStop.textId = TraceLogger_Stop;
         }
 
-        // Free all TextEvents that have no uses anymore.
-        for (TextIdHashMap::Enum e(extraTextId); !e.empty(); e.popFront()) {
-            if (e.front().value()->uses() == 0) {
-                js_delete(e.front().value());
-                e.removeFront();
-            }
-        }
     }
 
     uint64_t time = rdtsc() - traceLoggerState->startupTime;
@@ -955,4 +997,17 @@ TraceLoggerEvent::~TraceLoggerEvent()
 {
     if (payload_)
         payload_->release();
+}
+
+TraceLoggerEvent&
+TraceLoggerEvent::operator=(const TraceLoggerEvent& other)
+{
+    if (hasPayload())
+        payload()->release();
+    if (other.hasPayload())
+        other.payload()->use();
+
+    payload_ = other.payload_;
+
+    return *this;
 }

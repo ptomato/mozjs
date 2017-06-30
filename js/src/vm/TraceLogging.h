@@ -110,6 +110,9 @@ class TraceLoggerEvent {
     bool hasPayload() const {
         return !!payload_;
     }
+
+    TraceLoggerEvent& operator=(const TraceLoggerEvent& other);
+    TraceLoggerEvent(const TraceLoggerEvent& event) = delete;
 };
 
 /**
@@ -129,6 +132,10 @@ class TraceLoggerEventPayload {
         string_(string),
         uses_(0)
     { }
+
+    ~TraceLoggerEventPayload() {
+        MOZ_ASSERT(uses_ == 0);
+    }
 
     uint32_t textId() {
         return textId_;
@@ -166,7 +173,8 @@ class TraceLoggerThread
     mozilla::UniquePtr<TraceLoggerGraph> graph;
 
     PointerHashMap pointerMap;
-    TextIdHashMap extraTextId;
+    TextIdHashMap textIdPayloads;
+    uint32_t nextTextId;
 
     ContinuousSpace<EventEntry> events;
 
@@ -181,6 +189,7 @@ class TraceLoggerThread
       : enabled(0),
         failed(false),
         graph(),
+        nextTextId(TraceLogger_Last),
         iteration_(0),
         top(nullptr)
     { }
@@ -195,22 +204,22 @@ class TraceLoggerThread
     bool enable(JSContext* cx);
     bool disable();
 
-    // Given the previous iteration and lastEntryId, return an array of events
+    // Given the previous iteration and size, return an array of events
     // (there could be lost events). At the same time update the iteration and
-    // lastEntry and gives back how many events there are.
-    EventEntry* getEventsStartingAt(uint32_t* lastIteration, uint32_t* lastEntryId, size_t* num) {
+    // size and gives back how many events there are.
+    EventEntry* getEventsStartingAt(uint32_t* lastIteration, uint32_t* lastSize, size_t* num) {
         EventEntry* start;
         if (iteration_ == *lastIteration) {
-            MOZ_ASSERT(events.lastEntryId() >= *lastEntryId);
-            *num = events.lastEntryId() - *lastEntryId;
-            start = events.data() + *lastEntryId + 1;
+            MOZ_ASSERT(*lastSize <= events.size());
+            *num = events.size() - *lastSize;
+            start = events.data() + *lastSize;
         } else {
-            *num = events.lastEntryId() + 1;
+            *num = events.size();
             start = events.data();
         }
 
         *lastIteration = iteration_;
-        *lastEntryId = events.lastEntryId();
+        *lastSize = events.size();
         return start;
     }
 
@@ -220,16 +229,16 @@ class TraceLoggerThread
                               const char** lineno, size_t* lineno_len, const char** colno,
                               size_t* colno_len);
 
-    bool lostEvents(uint32_t lastIteration, uint32_t lastEntryId) {
+    bool lostEvents(uint32_t lastIteration, uint32_t lastSize) {
         // If still logging in the same iteration, there are no lost events.
         if (lastIteration == iteration_) {
-            MOZ_ASSERT(lastEntryId <= events.lastEntryId());
+            MOZ_ASSERT(lastSize <= events.size());
             return false;
         }
 
-        // When proceeded to the next iteration and lastEntryId points to
-        // the maximum capacity there are no logs that are lost.
-        if (lastIteration + 1 == iteration_ && lastEntryId == events.capacity())
+        // If we are in a consecutive iteration we are only sure we didn't lose any events,
+        // when the lastSize equals the maximum size 'events' can get.
+        if (lastIteration == iteration_ - 1 && lastSize == events.maxSize())
             return false;
 
         return true;
@@ -268,6 +277,7 @@ class TraceLoggerThread
     void stopEvent(uint32_t id);
   private:
     void stopEvent();
+    void log(uint32_t id);
 
   public:
     static unsigned offsetOfEnabled() {
