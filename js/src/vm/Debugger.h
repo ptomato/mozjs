@@ -607,7 +607,7 @@ class Debugger : private mozilla::LinkedListElement<Debugger>
     void updateObservesAsmJSOnDebuggees(IsObserving observing);
 
     JSObject* getHook(Hook hook) const;
-    bool hasAnyLiveHooks() const;
+    bool hasAnyLiveHooks(JSRuntime* rt) const;
 
     static JSTrapStatus slowPathOnEnterFrame(JSContext* cx, AbstractFramePtr frame);
     static bool slowPathOnLeaveFrame(JSContext* cx, AbstractFramePtr frame, bool ok);
@@ -1111,5 +1111,12 @@ bool ReportObjectRequired(JSContext* cx);
 
 } /* namespace js */
 
+namespace JS {
+
+template <>
+struct DeletePolicy<js::Debugger> : public js::GCManagedDeletePolicy<js::Debugger>
+{};
+
+} /* namespace JS */
 
 #endif /* vm_Debugger_h */

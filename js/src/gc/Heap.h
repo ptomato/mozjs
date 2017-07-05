@@ -106,6 +106,8 @@ enum class AllocKind {
     FAT_INLINE_STRING,
     STRING,
     EXTERNAL_STRING,
+    FAT_INLINE_ATOM,
+    ATOM,
     SYMBOL,
     JITCODE,
     LIMIT,
@@ -197,6 +199,8 @@ MapAllocToTraceKind(AllocKind kind)
         JS::TraceKind::String,       /* AllocKind::FAT_INLINE_STRING */
         JS::TraceKind::String,       /* AllocKind::STRING */
         JS::TraceKind::String,       /* AllocKind::EXTERNAL_STRING */
+        JS::TraceKind::String,       /* AllocKind::FAT_INLINE_ATOM */
+        JS::TraceKind::String,       /* AllocKind::ATOM */
         JS::TraceKind::Symbol,       /* AllocKind::SYMBOL */
         JS::TraceKind::JitCode,      /* AllocKind::JITCODE */
     };
@@ -1455,10 +1459,8 @@ TenuredCell::readBarrier(TenuredCell* thing)
 {
     MOZ_ASSERT(!CurrentThreadIsIonCompiling());
     MOZ_ASSERT(!isNullLike(thing));
-    if (thing->shadowRuntimeFromAnyThread()->isHeapBusy())
+    if (thing->shadowRuntimeFromAnyThread()->isHeapCollecting())
         return;
-    MOZ_ASSERT_IF(CurrentThreadCanAccessRuntime(thing->runtimeFromAnyThread()),
-                  !thing->shadowRuntimeFromAnyThread()->isHeapCollecting());
 
     JS::shadow::Zone* shadowZone = thing->shadowZoneFromAnyThread();
     MOZ_ASSERT_IF(!CurrentThreadCanAccessRuntime(thing->runtimeFromAnyThread()),
@@ -1479,7 +1481,7 @@ TenuredCell::writeBarrierPre(TenuredCell* thing)
 {
     MOZ_ASSERT(!CurrentThreadIsIonCompiling());
     MOZ_ASSERT_IF(thing, !isNullLike(thing));
-    if (!thing || thing->shadowRuntimeFromAnyThread()->isHeapBusy())
+    if (!thing || thing->shadowRuntimeFromAnyThread()->isHeapCollecting())
         return;
 
     JS::shadow::Zone* shadowZone = thing->shadowZoneFromAnyThread();

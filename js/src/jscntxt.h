@@ -12,6 +12,7 @@
 #include "mozilla/MemoryReporting.h"
 
 #include "js/TraceableVector.h"
+#include "js/Utility.h"
 #include "js/Vector.h"
 #include "vm/Runtime.h"
 
@@ -146,6 +147,10 @@ class ExclusiveContext : public ContextFriendFields,
     bool shouldBeJSContext() const {
         MOZ_ASSERT(isJSContext());
         return isJSContext();
+    }
+
+    bool runtimeMatches(JSRuntime* rt) const {
+        return runtime_ == rt;
     }
 
   protected:

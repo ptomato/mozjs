@@ -838,6 +838,11 @@ class GCRuntime
     void freeUnusedLifoBlocksAfterSweeping(LifoAlloc* lifo);
     void freeAllLifoBlocksAfterSweeping(LifoAlloc* lifo);
 
+    // Queue a thunk to run after the next minor GC.
+    void callAfterMinorGC(void (*thunk)(void* data), void* data) {
+        nursery.queueSweepAction(thunk, data);
+    }
+
     // Public here for ReleaseArenaLists and FinalizeTypedArenas.
     void releaseArena(ArenaHeader* aheader, const AutoLockGC& lock);
 
@@ -918,7 +923,7 @@ class GCRuntime
     void purgeRuntime();
     bool beginMarkPhase(JS::gcreason::Reason reason);
     bool shouldPreserveJITCode(JSCompartment* comp, int64_t currentTime,
-                               JS::gcreason::Reason reason);
+                               JS::gcreason::Reason reason, bool canAllocateMoreCode);
     void bufferGrayRoots();
     void markCompartments();
     IncrementalProgress drainMarkStack(SliceBudget& sliceBudget, gcstats::Phase phase);
@@ -932,7 +937,7 @@ class GCRuntime
 
     void beginSweepPhase(bool lastGC);
     void findZoneGroups();
-    bool findZoneEdgesForWeakMaps();
+    bool findInterZoneEdges();
     void getNextZoneGroup();
     void endMarkingZoneGroup();
     void beginSweepingZoneGroup();
@@ -1380,6 +1385,7 @@ inline bool GCRuntime::needZealousGC() { return false; }
 #endif
 
 } /* namespace gc */
+
 } /* namespace js */
 
 #endif

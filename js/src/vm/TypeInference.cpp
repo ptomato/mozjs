@@ -749,16 +749,16 @@ TypeSet::readBarrier(const TypeSet* types)
 }
 
 /* static */ bool
-TypeSet::IsTypeMarked(TypeSet::Type* v)
+TypeSet::IsTypeMarked(JSRuntime* rt, TypeSet::Type* v)
 {
     bool rv;
     if (v->isSingletonUnchecked()) {
         JSObject* obj = v->singletonNoBarrier();
-        rv = IsMarkedUnbarriered(&obj);
+        rv = IsMarkedUnbarriered(rt, &obj);
         *v = TypeSet::ObjectType(obj);
     } else if (v->isGroupUnchecked()) {
         ObjectGroup* group = v->groupNoBarrier();
-        rv = IsMarkedUnbarriered(&group);
+        rv = IsMarkedUnbarriered(rt, &group);
         *v = TypeSet::ObjectType(group);
     } else {
         rv = true;
@@ -3415,7 +3415,7 @@ PreliminaryObjectArrayWithTemplate::writeBarrierPre(PreliminaryObjectArrayWithTe
 {
     Shape* shape = objects->shape();
 
-    if (!shape || shape->runtimeFromAnyThread()->isHeapBusy())
+    if (!shape || shape->runtimeFromAnyThread()->isHeapCollecting())
         return;
 
     JS::Zone* zone = shape->zoneFromAnyThread();
@@ -3498,7 +3498,7 @@ PreliminaryObjectArrayWithTemplate::maybeAnalyze(ExclusiveContext* cx, ObjectGro
         }
     }
 
-    TryConvertToUnboxedLayout(cx, shape(), group, preliminaryObjects);
+    TryConvertToUnboxedLayout(cx, enter, shape(), group, preliminaryObjects);
     if (group->maybeUnboxedLayout())
         return;
 
@@ -3781,7 +3781,7 @@ TypeNewScript::maybeAnalyze(JSContext* cx, ObjectGroup* group, bool* regenerate,
     }
 
     // Try to use an unboxed representation for the group.
-    if (!TryConvertToUnboxedLayout(cx, templateObject()->lastProperty(), group, preliminaryObjects))
+    if (!TryConvertToUnboxedLayout(cx, enter, templateObject()->lastProperty(), group, preliminaryObjects))
         return false;
 
     js_delete(preliminaryObjects);
@@ -3981,7 +3981,7 @@ TypeNewScript::trace(JSTracer* trc)
 /* static */ void
 TypeNewScript::writeBarrierPre(TypeNewScript* newScript)
 {
-    if (newScript->function()->runtimeFromAnyThread()->isHeapBusy())
+    if (newScript->function()->runtimeFromAnyThread()->isHeapCollecting())
         return;
 
     JS::Zone* zone = newScript->function()->zoneFromAnyThread();
@@ -4192,6 +4192,10 @@ ObjectGroup::sweep(AutoClearTypeInferenceStateOnOOM* oom)
 
         if (unboxedLayout().newScript())
             unboxedLayout().newScript()->sweep();
+
+        // Discard constructor code to avoid holding onto ExecutablePools.
+        if (zone()->isGCCompacting())
+            unboxedLayout().setConstructorCode(nullptr);
     }
 
     if (maybePreliminaryObjects())

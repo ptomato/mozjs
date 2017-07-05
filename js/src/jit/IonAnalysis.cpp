@@ -200,14 +200,14 @@ FlagAllOperandsAsHavingRemovedUses(MBasicBlock* block)
 
     // Flag observable operands of the entry resume point as having removed uses.
     MResumePoint* rp = block->entryResumePoint();
-    do {
+    while (rp) {
         for (size_t i = 0, e = rp->numOperands(); i < e; i++) {
             if (!rp->isObservableOperand(i))
                 continue;
             rp->getOperand(i)->setUseRemovedUnchecked();
         }
         rp = rp->caller();
-    } while (rp);
+    }
 
     // Flag Phi inputs of the successors has having removed uses.
     MPhiVector worklist;
@@ -1925,6 +1925,17 @@ jit::RemoveUnmarkedBlocks(MIRGenerator* mir, MIRGraph& graph, uint32_t numMarked
         // since we may have removed edges even if we didn't remove any blocks.
         graph.unmarkBlocks();
     } else {
+        // As we are going to remove edges and basic blocks, we have to mark
+        // instructions which would be needed by baseline if we were to
+        // bailout.
+        for (PostorderIterator it(graph.poBegin()); it != graph.poEnd();) {
+            MBasicBlock* block = *it++;
+            if (!block->isMarked())
+                continue;
+
+            FlagAllOperandsAsHavingRemovedUses(block);
+        }
+
         // Find unmarked blocks and remove them.
         for (ReversePostorderIterator iter(graph.rpoBegin()); iter != graph.rpoEnd();) {
             MBasicBlock* block = *iter++;
@@ -3662,6 +3673,9 @@ jit::AnalyzeNewScriptDefiniteProperties(JSContext* cx, JSFunction* fun,
     TempAllocator temp(&alloc);
     JitContext jctx(cx, &temp);
 
+    if (!jit::CanLikelyAllocateMoreExecutableMemory())
+        return true;
+
     if (!cx->compartment()->ensureJitCompartmentExists(cx))
         return false;
 
@@ -3890,6 +3904,9 @@ jit::AnalyzeArgumentsUsage(JSContext* cx, JSScript* scriptArg)
     LifoAlloc alloc(TempAllocator::PreferredLifoChunkSize);
     TempAllocator temp(&alloc);
     JitContext jctx(cx, &temp);
+
+    if (!jit::CanLikelyAllocateMoreExecutableMemory())
+        return true;
 
     if (!cx->compartment()->ensureJitCompartmentExists(cx))
         return false;
@@ -4153,5 +4170,47 @@ jit::MakeLoopsContiguous(MIRGraph& graph)
         MakeLoopContiguous(graph, header, numMarked);
     }
 
+    return true;
+}
+
+MRootList::MRootList(TempAllocator& alloc)
+  : roots_(alloc)
+{
+}
+
+void
+MRootList::trace(JSTracer* trc)
+{
+    for (auto ptr : roots_) {
+        JSScript* ptrT = ptr;
+        TraceManuallyBarrieredEdge(trc, &ptrT, "mir-script");
+        MOZ_ASSERT(ptr == ptrT, "Shouldn't move without updating MIR pointers");
+    }
+}
+
+MOZ_MUST_USE bool
+jit::CreateMIRRootList(IonBuilder& builder)
+{
+    MOZ_ASSERT(!builder.info().isAnalysis());
+
+    TempAllocator& alloc = builder.alloc();
+    MIRGraph& graph = builder.graph();
+
+    MRootList* roots = new(alloc) MRootList(alloc);
+    if (!roots)
+        return false;
+
+    JSScript* prevScript = nullptr;
+
+    for (ReversePostorderIterator block(graph.rpoBegin()); block != graph.rpoEnd(); block++) {
+        JSScript* script = block->info().script();
+        if (script != prevScript) {
+            if (!roots->append(script))
+                return false;
+            prevScript = script;
+        }
+    }
+
+    builder.setRootList(*roots);
     return true;
 }

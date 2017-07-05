@@ -1547,7 +1547,7 @@ SortComparatorFunction::operator()(const Value& a, const Value& b, bool* lessOrE
         return false;
 
     InvokeArgs& args = fig.args();
-    if (!args.init(2))
+    if (!args.init(cx, 2))
         return false;
 
     args.setCallee(fval);
@@ -1882,6 +1882,7 @@ js::array_sort(JSContext* cx, unsigned argc, Value* vp)
         undefs = 0;
         bool allStrings = true;
         bool allInts = true;
+        bool extraIndexed = ObjectMayHaveExtraIndexedProperties(obj);
         RootedValue v(cx);
         for (uint32_t i = 0; i < len; i++) {
             if (!CheckForInterrupt(cx))
@@ -1914,7 +1915,10 @@ js::array_sort(JSContext* cx, unsigned argc, Value* vp)
         }
 
         /* Here len == n + undefs + number_of_holes. */
+        bool defaultOrMatch;
         if (fval.isNull()) {
+            defaultOrMatch = true;
+
             /*
              * Sort using the default comparator converting all elements to
              * strings.
@@ -1938,6 +1942,7 @@ js::array_sort(JSContext* cx, unsigned argc, Value* vp)
             if (comp == Match_Failure)
                 return false;
 
+            defaultOrMatch = comp != Match_None;
             if (comp != Match_None) {
                 if (allInts) {
                     JS_ALWAYS_TRUE(vec.resize(n * 2));
@@ -1958,7 +1963,10 @@ js::array_sort(JSContext* cx, unsigned argc, Value* vp)
             }
         }
 
-        if (!InitArrayElements(cx, obj, 0, uint32_t(n), vec.begin(), ShouldUpdateTypes::DontUpdate))
+        ShouldUpdateTypes updateTypes = !extraIndexed && (allStrings || allInts) && defaultOrMatch
+                                        ? ShouldUpdateTypes::DontUpdate
+                                        : ShouldUpdateTypes::Update;
+        if (!InitArrayElements(cx, obj, 0, uint32_t(n), vec.begin(), updateTypes))
             return false;
     }
 
@@ -2509,7 +2517,7 @@ js::array_splice_impl(JSContext* cx, unsigned argc, Value* vp, bool returnValueI
             Rooted<ArrayObject*> arr(cx, &obj->as<ArrayObject>());
             if (arr->lengthIsWritable()) {
                 DenseElementResult result =
-                    arr->ensureDenseElements(cx, arr->length(), itemCount - actualDeleteCount);
+                    arr->ensureDenseElements(cx, len, itemCount - actualDeleteCount);
                 if (result == DenseElementResult::Failure)
                     return false;
             }
@@ -3086,7 +3094,7 @@ array_of(JSContext* cx, unsigned argc, Value* vp)
     RootedObject obj(cx);
     {
         ConstructArgs cargs(cx);
-        if (!cargs.init(1))
+        if (!cargs.init(cx, 1))
             return false;
         cargs[0].setNumber(args.length());
 

@@ -722,13 +722,14 @@ JitCompartment::sweep(FreeOp* fop, JSCompartment* compartment)
     if (!stubCodes_->lookup(ICSetProp_Fallback::Compiler::BASELINE_KEY))
         baselineSetPropReturnAddr_ = nullptr;
 
-    if (stringConcatStub_ && !IsMarkedUnbarriered(&stringConcatStub_))
+    JSRuntime* rt = fop->runtime();
+    if (stringConcatStub_ && !IsMarkedUnbarriered(rt, &stringConcatStub_))
         stringConcatStub_ = nullptr;
 
-    if (regExpExecStub_ && !IsMarkedUnbarriered(&regExpExecStub_))
+    if (regExpExecStub_ && !IsMarkedUnbarriered(rt, &regExpExecStub_))
         regExpExecStub_ = nullptr;
 
-    if (regExpTestStub_ && !IsMarkedUnbarriered(&regExpTestStub_))
+    if (regExpTestStub_ && !IsMarkedUnbarriered(rt, &regExpTestStub_))
         regExpTestStub_ = nullptr;
 
     for (size_t i = 0; i <= SimdTypeDescr::LAST_TYPE; i++) {
@@ -861,8 +862,8 @@ JitCode::finalize(FreeOp* fop)
     // Don't do this if the Ion code is protected, as the signal handler will
     // deadlock trying to reacquire the interrupt lock.
     {
-        AutoWritableJitCode awjc(this);
-        memset(code_, JS_SWEPT_CODE_PATTERN, bufferSize_);
+        AutoWritableJitCode awjc(fop->runtime(), code_ - headerSize_, headerSize_ + bufferSize_);
+        memset(code_ - headerSize_, JS_SWEPT_CODE_PATTERN, headerSize_ + bufferSize_);
         code_ = nullptr;
     }
 
@@ -2236,6 +2237,9 @@ IonCompile(JSContext* cx, JSScript* script,
                 ". (Compiled on background thread.)",
                 builderScript->filename(), builderScript->lineno());
 
+        if (!CreateMIRRootList(*builder))
+            return AbortReason_Alloc;
+
         if (!StartOffThreadIonCompile(cx, builder)) {
             JitSpew(JitSpew_IonAbort, "Unable to start off-thread ion compilation.");
             builder->graphSpewer().endFunction();
@@ -2327,6 +2331,13 @@ CheckScript(JSContext* cx, JSScript* script, bool osr)
         return false;
     }
 
+    if (script->nTypeSets() >= UINT16_MAX) {
+        // In this case multiple bytecode ops can share a single observed
+        // TypeSet (see bug 1303710).
+        TrackAndSpewIonAbort(cx, script, "too many typesets");
+        return false;
+    }
+
     return true;
 }
 
@@ -2398,6 +2409,11 @@ Compile(JSContext* cx, HandleScript script, BaselineFrame* osrFrame, jsbytecode*
     OptimizationLevel optimizationLevel = GetOptimizationLevel(script, osrPc);
     if (optimizationLevel == Optimization_DontCompile)
         return Method_Skipped;
+
+    if (!CanLikelyAllocateMoreExecutableMemory()) {
+        script->resetWarmUpCounter();
+        return Method_Skipped;
+    }
 
     if (script->hasIonScript()) {
         IonScript* scriptIon = script->ionScript();

@@ -129,6 +129,7 @@ IonBuilder::IonBuilder(JSContext* analysisContext, CompileCompartment* comp,
     actionableAbortScript_(nullptr),
     actionableAbortPc_(nullptr),
     actionableAbortMessage_(nullptr),
+    rootList_(nullptr),
     analysisContext(analysisContext),
     baselineFrame_(baselineFrame),
     constraints_(constraints),
@@ -168,6 +169,7 @@ IonBuilder::IonBuilder(JSContext* analysisContext, CompileCompartment* comp,
 
     MOZ_ASSERT(script()->hasBaselineScript() == (info->analysisMode() != Analysis_ArgumentsUsage));
     MOZ_ASSERT(!!analysisContext == (info->analysisMode() == Analysis_DefiniteProperties));
+    MOZ_ASSERT(script_->nTypeSets() < UINT16_MAX);
 
     if (!info->isAnalysis())
         script()->baselineScript()->setIonCompiledOrInlined();
@@ -1233,9 +1235,11 @@ IonBuilder::initScopeChain(MDefinition* callee)
         current->add(scope);
 
         // This reproduce what is done in CallObject::createForFunction. Skip
-        // this for analyses, as the script might not have a baseline script
-        // with template objects yet.
-        if (fun->needsCallObject() && !info().isAnalysis()) {
+        // this for the arguments analysis, as the script might not have a
+        // baseline script with template objects yet.
+        if (fun->needsCallObject() &&
+            info().analysisMode() != Analysis_ArgumentsUsage)
+        {
             if (fun->isNamedLambda()) {
                 scope = createDeclEnvObject(callee, scope);
                 if (!scope)
@@ -6133,6 +6137,9 @@ IonBuilder::getSingletonPrototype(JSFunction* target)
 MDefinition*
 IonBuilder::createThisScriptedSingleton(JSFunction* target, MDefinition* callee)
 {
+    if (!target->hasScript())
+        return nullptr;
+
     // Get the singleton prototype (if exists)
     JSObject* proto = getSingletonPrototype(target);
     if (!proto)
@@ -14046,4 +14053,14 @@ IonBuilder::addLexicalCheck(MDefinition* input)
     }
 
     return input;
+}
+
+void
+IonBuilder::trace(JSTracer* trc)
+{
+    if (!compartment->runtime()->runtimeMatches(trc->runtime()))
+        return;
+
+    MOZ_ASSERT(rootList_);
+    rootList_->trace(trc);
 }

@@ -32,7 +32,7 @@ WeakMapBase::WeakMapBase(JSObject* memOf, Zone* zone)
 
 WeakMapBase::~WeakMapBase()
 {
-    MOZ_ASSERT(CurrentThreadIsGCSweeping() || CurrentThreadIsHandlingInitFailure());
+    MOZ_ASSERT(CurrentThreadIsGCSweeping());
 }
 
 void
@@ -150,7 +150,7 @@ ObjectValueMap::findZoneEdges()
         if (!delegate)
             continue;
         Zone* delegateZone = delegate->zone();
-        if (delegateZone == zone)
+        if (delegateZone == zone || !delegateZone->isGCMarking())
             continue;
         if (!delegateZone->gcZoneGroupEdges.put(key->zone()))
             return false;
