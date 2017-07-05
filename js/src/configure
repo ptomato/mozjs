@@ -12494,6 +12494,8 @@ else
 fi
 rm -f conftest*
     CFLAGS=$_SAVE_CFLAGS
+elif test -n "$JS_POSIX_NSPR"; then
+    NSPR_PKGCONF_CHECK=
 fi
 
 

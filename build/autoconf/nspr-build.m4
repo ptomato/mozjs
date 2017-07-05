@@ -186,6 +186,8 @@ if test -n "$MOZ_NATIVE_NSPR"; then
                 ,
                 AC_MSG_ERROR([system NSPR does not support PR_STATIC_ASSERT]))
     CFLAGS=$_SAVE_CFLAGS
+elif test -n "$JS_POSIX_NSPR"; then
+    NSPR_PKGCONF_CHECK=
 fi
 AC_SUBST(NSPR_PKGCONF_CHECK)
 
