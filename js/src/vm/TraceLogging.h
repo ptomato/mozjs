@@ -242,7 +242,7 @@ class TraceLoggerThread
 
         // If we are in a consecutive iteration we are only sure we didn't lose any events,
         // when the lastSize equals the maximum size 'events' can get.
-        if (lastIteration == iteration_ - 1 && lastSize == CONTINUOUSSPACE_LIMIT)
+        if (lastIteration == iteration_ - 1 && lastSize == events.max_items())
             return false;
 
         return true;
