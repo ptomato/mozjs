@@ -364,7 +364,7 @@ InflateUTF8StringHelper(JSContext* cx, const UTF8Chars src, CountAction countAct
     return TwoByteCharsZ(dst, *outlen);
 }
 
-TwoByteCharsZ
+JS_PUBLIC_API(TwoByteCharsZ)
 JS::UTF8CharsToNewTwoByteCharsZ(JSContext* cx, const UTF8Chars utf8, size_t* outlen)
 {
     return InflateUTF8StringHelper(cx, utf8, InflateUTF8StringToBuffer<CountAndReportInvalids>,

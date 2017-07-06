@@ -17,6 +17,8 @@
 #include "js/TypeDecls.h"
 #include "js/Utility.h"
 
+extern JS_PUBLIC_API(void) JS_ReportOutOfMemory(JSContext* cx);
+
 namespace js {
 
 enum class AllocFunction {
@@ -130,7 +132,7 @@ class TempAllocPolicy
 
     bool checkSimulatedOOM() const {
         if (js::oom::ShouldFailWithOOM()) {
-            js::ReportOutOfMemory(reinterpret_cast<ExclusiveContext*>(cx_));
+            JS_ReportOutOfMemory(reinterpret_cast<JSContext*>(cx_));
             return false;
         }
 

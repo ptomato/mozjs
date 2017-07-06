@@ -2411,7 +2411,7 @@ struct JSPropertyDescriptor : public JS::Traceable {
     {}
 
     static void trace(JSPropertyDescriptor* self, JSTracer* trc) { self->trace(trc); }
-    void trace(JSTracer* trc);
+    JS_PUBLIC_API(void) trace(JSTracer* trc);
 };
 
 namespace JS {

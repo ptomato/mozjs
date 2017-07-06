@@ -187,7 +187,7 @@ Utf8ToOneUcs4Char(const uint8_t* utf8Buffer, int utf8Length);
  * - On success, returns a malloc'd TwoByteCharsZ, and updates |outlen| to hold
  *   its length;  the length value excludes the trailing null.
  */
-extern TwoByteCharsZ
+extern JS_PUBLIC_API(TwoByteCharsZ)
 UTF8CharsToNewTwoByteCharsZ(JSContext* cx, const UTF8Chars utf8, size_t* outlen);
 
 /*
