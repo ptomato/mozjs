@@ -302,7 +302,9 @@ AtomicOperations::isLockfree(int32_t size)
 # include "jit/mips-shared/AtomicOperations-mips-shared.h"
 #elif defined(__ppc64__) || defined(__PPC64_)       \
     || defined(__ppc64le__) || defined(__PPC64LE__) \
-    || defined(__ppc__) || defined(__PPC__)
+    || defined(__ppc__) || defined(__PPC__) \
+    || defined(__aarch64__) || defined(__arm__) \
+    || defined(__s390x__) || defined(__mips__)
 # include "jit/none/AtomicOperations-ppc.h"
 #elif defined(JS_CODEGEN_NONE)
 # include "jit/none/AtomicOperations-none.h"
