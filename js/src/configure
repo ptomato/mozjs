@@ -18,6 +18,8 @@
 : "divert(0)dnl"
 #!/bin/sh
 
+touch $0  # this is a git checkout, mtimes are not reliable
+
 SRCDIR=$(dirname $0)
 TOPSRCDIR="$SRCDIR"/../..
 export OLD_CONFIGURE="$SRCDIR"/old-configure
