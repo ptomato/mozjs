@@ -124,6 +124,9 @@ def prepare_configure(old_configure, mozillabuild, mozconfig, autoconf, build_en
         else:
             refresh = False
 
+        if exists(os.path.join(build_env.topsrcdir, '.git')):
+            refresh = False
+
     if refresh:
         log.info('Refreshing %s with %s', old_configure, autoconf)
 
