@@ -1,8 +1,17 @@
-This directory contains SpiderMonkey 52.
+This tarball contains SpiderMonkey 52.
 
-This release is based on a revision of Mozilla 52:
-  http://hg.mozilla.org/releases/
-The changes in the patches/ directory were applied.
+It is based on the release build from Mozilla as of January 11, 2018,
+downloaded from:
+https://queue.taskcluster.net/v1/task/PNGBJ8KgQuK9tX78Hajrbg/runs/0/artifacts/public/build/mozjs-52.6.0.tar.bz2
+(Link expires after at least 30 and at most 90 days)
 
-MDN hosts the latest SpiderMonkey 52 release notes:
-  https://developer.mozilla.org/en-US/docs/SpiderMonkey/52
+The source for this tarball is the "mozjs52" branch of
+https://github.com/ptomato/mozjs, which consists of the Mozilla tarball
+unpacked, plus patches which are pending review and/or backporting in
+Mozilla's bug tracker.
+
+Patches applied:
+Disable MOZ_GLUE_IN_PROGRAM in stand-alone builds on all platforms
+build: Be nicer about options
+build: Deal with git-checkout mtimes
+README: Clarify provenance of this source
