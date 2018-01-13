@@ -1,0 +1,98 @@
+---
+git:
+  depth: 1
+language: cpp
+os:
+  - linux
+  - osx
+compiler: clang
+dist: bionic
+addons:
+  apt:
+    packages:
+      - cargo
+      - clang-6.0  # for bindgen
+      - rustc
+  homebrew:
+    update: true
+    packages:
+      - llvm
+      - openssl
+      - python@3.8
+      - rust
+      - yasm
+env:
+  global:
+    - AUTOCONF=autoconf
+    - PREFIX=$HOME/build/ptomato/mozjs/_install
+    - PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+    - LDD=ldd
+
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-6.0  # for bindgen
+            - g++-8
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-6.0  # for bindgen
+            - g++-7
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-6.0  # for bindgen
+            - g++-6
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
+
+before_install:
+  - eval "${MATRIX_EVAL}"
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      eval "LDD='otool -L'"
+      export PATH="/usr/local/opt/python@3.8/bin:$PATH"
+    fi
+
+before_script:
+  - mkdir -p $PREFIX
+  - mkdir -p _build
+  - cd _build
+script:
+  - |
+    ../js/src/configure --prefix=$PREFIX --enable-posix-nspr-emulation \
+      --enable-unaligned-private-values --with-system-zlib --with-intl-api \
+      --disable-jemalloc && make -j3 && make install
+  - cd ..
+  - $PREFIX/bin/js68 -e 'print("OK");'
+  - |
+    $CXX -o testjs -std=c++14 `pkg-config --cflags mozjs-68` testjs.cpp \
+      `pkg-config --libs mozjs-68` && LD_LIBRARY_PATH=$PREFIX/lib ./testjs
+after_script:
+  - ls -R $PREFIX
+  - LD_LIBRARY_PATH=$PREFIX/lib $LDD $PREFIX/lib/libmozjs-68.so
+  - LD_LIBRARY_PATH=$PREFIX/lib $LDD testjs
