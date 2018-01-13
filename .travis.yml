@@ -1,0 +1,110 @@
+---
+git:
+  depth: 1
+language: cpp
+os:
+  - linux
+  - osx
+compiler: clang
+dist: bionic
+osx_image: xcode10.3
+addons:
+  apt:
+    packages:
+      - cargo
+      - rustc
+  homebrew:
+    update: true
+    packages:
+      - llvm
+      - openssl
+      - python@3.8
+      - rust
+      - yasm
+env:
+  global:
+    - AUTOCONF=autoconf
+    - PREFIX=$HOME/build/ptomato/mozjs/_install
+    - PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+    - LDD=ldd
+
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-7  # for bindgen
+            - g++-10
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-10 && CXX=g++-10"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-7  # for bindgen
+            - g++-9
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-7  # for bindgen
+            - g++-8
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - cargo
+            - clang-7  # for bindgen
+            - g++-7
+            - rustc
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+
+before_install:
+  - eval "${MATRIX_EVAL}"
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      eval "LDD='otool -L'"
+      export PATH="/usr/local/opt/python@3.8/bin:$PATH"
+    fi
+
+before_script:
+  - mkdir -p $PREFIX
+  - mkdir -p _build
+  - cd _build
+script:
+  - |
+    ../js/src/configure --prefix=$PREFIX --with-system-zlib --with-intl-api \
+      --disable-jemalloc && make -j3 && make install
+  - cd ..
+  - $PREFIX/bin/js78 -e 'print("OK");'
+  - |
+    $CXX -o testjs -std=c++17 `pkg-config --cflags mozjs-78` testjs.cpp \
+      `pkg-config --libs mozjs-78` && LD_LIBRARY_PATH=$PREFIX/lib ./testjs
+after_script:
+  - ls -R $PREFIX
+  - LD_LIBRARY_PATH=$PREFIX/lib $LDD $PREFIX/lib/libmozjs-78.so
+  - LD_LIBRARY_PATH=$PREFIX/lib $LDD testjs
