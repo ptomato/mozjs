@@ -1,0 +1,49 @@
+language: cpp
+compiler: clang
+os:
+  - linux
+  - osx
+env:
+  global:
+    - AUTOCONF=autoconf
+    - PREFIX=$HOME/build/ptomato/mozjs/_install
+    - PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
+
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-6
+      env:
+        - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
+
+before_install:
+  - eval "${MATRIX_EVAL}"
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install yasm; fi
+
+before_script:
+  - mkdir -p $PREFIX
+  - mkdir -p _build
+  - cd _build
+script:
+  - ../js/src/configure --prefix=$PREFIX --enable-posix-nspr-emulation --with-system-zlib --with-intl-api && make -j3 && make install
+  - cd ..
+  - $PREFIX/bin/js52 -e 'print("OK");'
+  - $CXX -o testjs -std=c++11 `pkg-config --cflags mozjs-52` testjs.cpp `pkg-config --libs mozjs-52` && LD_LIBRARY_PATH=$PREFIX/lib ./testjs
+after_script:
+  - ls -R $PREFIX
