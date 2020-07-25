@@ -1,0 +1,5 @@
+commit 4a8e49b3ca7f9f74a4cafe6621ff9ba548ccc353
+Author: Alexey Shvayka <shvaikalesh@gmail.com>
+Date:   Sat Apr 11 01:41:59 2020 +0300
+
+    Add test for \0 in Unicode patterns (#2569)
