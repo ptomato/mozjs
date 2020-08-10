@@ -210,6 +210,7 @@ EXPORTS.js += [
 ]
 
 EXPORTS.js.experimental += [
+    '../public/experimental/CodeCoverage.h',
     '../public/experimental/SourceHook.h',
 ]
 
