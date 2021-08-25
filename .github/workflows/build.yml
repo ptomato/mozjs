@@ -1,0 +1,102 @@
+---
+name: test-build
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - CC: gcc-9
+            CXX: g++-9
+          - CC: gcc-10
+            CXX: g++-10
+          - CC: clang
+            CXX: clang++
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install cargo rustc
+      - name: Setup environment
+        run: |
+          echo CC=${{ matrix.CC }} >> $GITHUB_ENV
+          echo CXX=${{ matrix.CXX }} >> $GITHUB_ENV
+          echo AUTOCONF=autoconf >> $GITHUB_ENV
+          echo PREFIX=$HOME/build/ptomato/mozjs/_install >> $GITHUB_ENV
+      - name: Setup environment 2 (?!)
+        run: |
+          echo PKG_CONFIG_PATH="${{ env.PREFIX }}/lib/pkgconfig" >> $GITHUB_ENV
+          echo LD_LIBRARY_PATH="${{ env.PREFIX }}/lib" >> $GITHUB_ENV
+      - name: Setup directories
+        run: |
+          mkdir -p "${{ env.PREFIX }}"
+          mkdir -p _build
+      - name: Build SpiderMonkey
+        run: |
+          cd _build
+          ../js/src/configure --prefix="${{ env.PREFIX }}" --with-system-zlib \
+            --with-intl-api --disable-jemalloc
+          make -j$((`nproc` + 1))
+          make install
+      - name: Reality check
+        run: |
+          "${{ env.PREFIX }}/bin/js102" -e 'print("OK");'
+      - name: Run test program
+        run: |
+          "${{ env.CXX }}" -o testjs -std=c++17 \
+            `pkg-config --cflags mozjs-102` \
+            testjs.cpp `pkg-config --libs mozjs-102`
+          ./testjs
+      - name: Dump linker info
+        if: ${{ failure() }}
+        run: |
+          ls -R "${{ env.PREFIX }}"
+          ldd "${{ env.PREFIX }}/lib/libmozjs-102.so"
+          ldd testjs
+
+  # GitHub, don't claim it's YAML if you don't support YAML anchors!
+  build-macos:
+    runs-on: macos-10.15
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install rust yasm
+      - name: Setup environment
+        run: |
+          echo AUTOCONF=autoconf >> $GITHUB_ENV
+          echo PREFIX=$HOME/build/ptomato/mozjs/_install >> $GITHUB_ENV
+          echo /usr/local/opt/python@3.8/bin >> $GITHUB_PATH
+      - name: Setup environment 2 (?!)
+        run: |
+          echo PKG_CONFIG_PATH="${{ env.PREFIX }}/lib/pkgconfig" >> $GITHUB_ENV
+          echo LD_LIBRARY_PATH="${{ env.PREFIX }}/lib" >> $GITHUB_ENV
+      - name: Setup directories
+        run: |
+          mkdir -p "${{ env.PREFIX }}"
+          mkdir -p _build
+      - name: Build SpiderMonkey
+        run: |
+          cd _build
+          ../js/src/configure --prefix="${{ env.PREFIX }}" --with-system-zlib \
+            --with-intl-api --disable-jemalloc
+          make -j$((`nproc` + 1))
+          make install
+      - name: Reality check
+        run: |
+          "${{ env.PREFIX }}/bin/js102" -e 'print("OK");'
+      - name: Run test program
+        run: |
+          clang++ -o testjs -std=c++17 `pkg-config --cflags mozjs-102` \
+            testjs.cpp `pkg-config --libs mozjs-102`
+          ./testjs
+      - name: Dump linker info
+        if: ${{ failure() }}
+        run: |
+          ls -R "${{ env.PREFIX }}"
+          otool -L "${{ env.PREFIX }}/lib/libmozjs-102.dylib"
+          otool -L testjs
