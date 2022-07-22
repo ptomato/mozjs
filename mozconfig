@@ -1,0 +1,8 @@
+# Much slower when running, but adds assertions that are much better for
+# developing against the JSAPI.
+ac_add_options --enable-debug
+
+# Much faster when running, worse for debugging.
+ac_add_options --enable-optimize
+
+mk_add_options MOZ_OBJDIR=obj-debug
