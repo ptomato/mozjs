@@ -12,7 +12,7 @@ def pkg_config(prefixes):
 
 @depends(compile_environment, target)
 def use_pkg_config(compile_environment, target):
-    return compile_environment and target.os not in ("WINNT", "OSX", "Android")
+    return compile_environment and target.os not in ("WINNT", "Android")
 
 
 pkg_config = check_prog(
