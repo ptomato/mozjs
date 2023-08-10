@@ -2,6 +2,11 @@ This directory contains SpiderMonkey 115.
 
 This release is based on a revision of Mozilla 115:
   https://hg.mozilla.org/releases/
-The changes in the patches/ directory were applied.
+
+See https://github.com/ptomato/mozjs for a patched source tree which will build
+from git.
+
+Patches:
+  https://bugzilla.mozilla.org/show_bug.cgi?id=1783570
 
 See https://spidermonkey.dev/ for documentation, examples, and release notes.
