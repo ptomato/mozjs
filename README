@@ -2,6 +2,12 @@ This directory contains SpiderMonkey 140.
 
 This release is based on a revision of Mozilla 140:
   https://hg.mozilla.org/releases/
-The changes in the patches/ directory were applied.
+
+See https://github.com/ptomato/mozjs for a patched source tree which will build
+from git.
+
+Patches:
+  https://bugzilla.mozilla.org/show_bug.cgi?id=1783570
+  https://phabricator.services.mozilla.com/D256360
 
 See https://spidermonkey.dev/ for documentation, examples, and release notes.
