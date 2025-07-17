@@ -66,4 +66,8 @@
 #undef MOZJS_MAJOR_VERSION
 #undef MOZJS_MINOR_VERSION
 
+/* Controls API in UniquePtrExtensions.h. */
+#undef XP_UNIX
+#undef XP_WIN
+
 #endif /* js_config_h */
